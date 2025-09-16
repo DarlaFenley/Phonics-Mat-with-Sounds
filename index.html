@@ -1,87 +1,14 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Phonics Mat</title>
-  <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#2b7cff">
-  <link rel="icon" href="icon.png" type="image/png">
-  <style>
-    :root{--tile-size:70px; --gap:10px;}
-    body{font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial; margin:0; background:#f7f7fb; display:flex; flex-direction:column; height:100vh;}
-    header{padding:12px 16px; background:#2c3e50; color:white;}
-    button{padding:8px 12px; border-radius:8px; border:0; background:#1abc9c; color:white; font-weight:600;}
-    #mat-area{flex:1; padding:16px; display:flex; flex-direction:column; gap:16px; box-sizing:border-box;}
-    .tiles{display:flex; flex-wrap:wrap; gap: var(--gap); justify-content:center;}
-    .tile{width:var(--tile-size); height:var(--tile-size); display:flex; align-items:center; justify-content:center; font-size:28px; font-weight:700; color:white; border-radius:10px; user-select:none; touch-action:none; box-shadow:0 6px 10px rgba(30,30,60,0.10); position:relative; cursor:pointer;}
-    .consonant{background:#2b7cff;}
-    .vowel{background:#ff5252;}
-    #lined-area{flex:1; border:2px dashed #aaa; border-radius:10px; padding:16px; background: repeating-linear-gradient(to bottom, #fff, #fff 35px, #e0e0e0 36px); position:relative; min-height:200px; overflow:hidden;}
-    footer{padding:10px 16px; font-size:13px; color:#444; background:#fff;}
-  </style>
-</head>
-<body>
-<header>
-  <div style="display:flex;justify-content:space-between;align-items:center;">
-    <div>
-      <strong>Phonics Mat</strong><br><span style="font-size:13px;">Tap letters, drag to lines — phoneme plays when placed.</span>
-    </div>
-    <button id="resetBtn">Reset</button>
-  </div>
-</header>
+let voicesReady = false;
 
-<div id="mat-area">
-  <div class="tiles" id="tiles"></div>
-  <h3 style="margin:0;font-size:16px;">Lined Area</h3>
-  <div id="lined-area"></div>
-</div>
-
-<footer>
-  Vowels are red (A, E, I, O, U). Consonants are blue. Tap to add letters, slide them into place, they snap to the writing lines and play a short phoneme sound.
-</footer>
-
-<script>
-// Phonics Mat with SpeechSynthesis-based phoneme playback
-const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
-const vowels = new Set(['A','E','I','O','U']);
-const tilesEl = document.getElementById('tiles');
-const linedArea = document.getElementById('lined-area');
-
-let placedCount = 0;
-let size = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--tile-size'));
-let spacing = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--gap'));
-
-// Mapping: phoneme text to speak for each letter.
-// These are short single-sound approximations intended for phonics (short vowels, common consonant sounds).
-const phonemeMap = {
-  A: 'a',   // short a (as in apple) - approximation
-  B: 'b',   // 'b' (buh)
-  C: 'c',   // hard c (cuh) - context dependent but use /k/
-  D: 'd',
-  E: 'e',   // short e (as in egg)
-  F: 'f',
-  G: 'g',   // hard g (guh)
-  H: 'h',
-  I: 'i',   // short i (as in igloo)
-  J: 'j',
-  K: 'k',
-  L: 'l',
-  M: 'm',
-  N: 'n',
-  O: 'o',   // short o (as in octopus)
-  P: 'p',
-  Q: 'kw',   // common 'kw' sound
-  R: 'r',
-  S: 's',
-  T: 't',
-  U: 'u',   // short u (as in up)
-  V: 'v',
-  W: 'w',
-  X: 'ks',  // per your request
-  Y: 'y',
-  Z: 'z'
-};
+function preloadVoices() {
+  if ('speechSynthesis' in window) {
+    window.speechSynthesis.onvoiceschanged = () => {
+      voicesReady = true;
+    };
+    // Force voice list to load
+    window.speechSynthesis.getVoices();
+  }
+}
 
 function speakPhoneme(letter){
   const text = phonemeMap[letter.toUpperCase()] || letter;
@@ -90,118 +17,20 @@ function speakPhoneme(letter){
     utter.lang = 'en-US';
     utter.rate = 0.9;
     utter.pitch = 1.0;
+
     const voices = window.speechSynthesis.getVoices();
     if(voices && voices.length){
-      const preferred = voices.find(v => /female|zira|samantha|karen|amy|susan/i.test(v.name)) || voices.find(v => v.lang.startsWith('en')) || voices[0];
+      const preferred = voices.find(v => /female|samantha|karen|amy|zira/i.test(v.name))
+                        || voices.find(v => v.lang.startsWith('en'))
+                        || voices[0];
       if(preferred) utter.voice = preferred;
     }
-    window.speechSynthesis.cancel();
+
     window.speechSynthesis.speak(utter);
   } else {
-    console.log('Speech not supported: would say', text);
+    console.log('Speech not supported');
   }
 }
 
-function createTile(letter, isClone=false){
-  const el = document.createElement('div');
-  el.className = 'tile ' + (vowels.has(letter) ? 'vowel' : 'consonant');
-  el.textContent = letter;
-  if(isClone){
-    el.style.position = 'absolute';
-    placeTileInRow(el);
-    makeMovable(el);
-    speakPhoneme(letter);
-  } else {
-    el.addEventListener('click', ()=>{
-      const clone = createTile(letter, true);
-      linedArea.appendChild(clone);
-    });
-  }
-  return el;
-}
-
-function placeTileInRow(el){
-  const areaWidth = Math.max(200, linedArea.clientWidth - 2*spacing);
-  const maxPerRow = Math.max(1, Math.floor(areaWidth / (size + spacing)));
-  const row = Math.floor(placedCount / maxPerRow);
-  const col = placedCount % maxPerRow;
-  const x = col * (size + spacing);
-  const y = row * (size + spacing) + 20;
-  el.style.left = x + 'px';
-  el.style.top = y + 'px';
-  placedCount++;
-}
-
-window.addEventListener('resize', ()=>{
-  size = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--tile-size'));
-  spacing = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--gap'));
-});
-
-function populateTiles(){
-  tilesEl.innerHTML = '';
-  letters.forEach(l => tilesEl.appendChild(createTile(l)));
-}
-populateTiles();
-
-function makeMovable(el){
-  let drag = {active:false, startX:0, startY:0, offsetX:0, offsetY:0};
-
-  function start(e){
-    e.preventDefault();
-    drag.active = true;
-    drag.startX = (e.touches ? e.touches[0].clientX : (e.clientX || e.pageX));
-    drag.startY = (e.touches ? e.touches[0].clientY : (e.clientY || e.pageY));
-    drag.offsetX = parseFloat(el.style.left||0);
-    drag.offsetY = parseFloat(el.style.top||0);
-    el.style.zIndex = 999;
-  }
-
-  function move(e){
-    if(!drag.active) return;
-    const clientX = (e.touches ? e.touches[0].clientX : (e.clientX || e.pageX));
-    const clientY = (e.touches ? e.touches[0].clientY : (e.clientY || e.pageY));
-    const dx = clientX - drag.startX;
-    const dy = clientY - drag.startY;
-    el.style.left = (drag.offsetX + dx) + 'px';
-    el.style.top = (drag.offsetY + dy) + 'px';
-  }
-
-  function end(){
-    if(drag.active){
-      const currentX = parseFloat(el.style.left||0);
-      const currentY = parseFloat(el.style.top||0);
-      const col = Math.round(currentX / (size + spacing));
-      const row = Math.round((currentY - 20) / (size + spacing));
-      const snappedX = Math.max(0, col * (size + spacing));
-      const snappedY = Math.max(20, row * (size + spacing) + 20);
-      el.style.left = snappedX + 'px';
-      el.style.top = snappedY + 'px';
-      const letter = el.textContent.trim().toUpperCase();
-      speakPhoneme(letter);
-    }
-    drag.active = false;
-    el.style.zIndex = '';
-  }
-
-  el.addEventListener('pointerdown', start);
-  el.addEventListener('pointermove', move);
-  el.addEventListener('pointerup', end);
-  el.addEventListener('touchstart', start, {passive:false});
-  el.addEventListener('touchmove', move, {passive:false});
-  el.addEventListener('touchend', end);
-  el.addEventListener('mousedown', start);
-  document.addEventListener('mousemove', move);
-  document.addEventListener('mouseup', end);
-}
-
-document.getElementById('resetBtn').addEventListener('click', ()=>{
-  linedArea.innerHTML = '';
-  placedCount = 0;
-});
-
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('service-worker.js').catch(()=>{});
-}
-</script>
-</body>
-</html>
+// Call once after first user interaction
+document.body.addEventListener('click', preloadVoices, { once: true });
